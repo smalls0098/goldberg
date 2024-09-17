@@ -173,3 +173,41 @@ pub fn goldberg_string(tokens: proc_macro::TokenStream) -> proc_macro::TokenStre
     engine::register_callbacks(&mut moisture);
     proc_macro::TokenStream::from(engine::str_entry(&moisture, stream))
 }
+
+#[proc_macro]
+pub fn gstringify(tokens: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    let stream = TokenStream::from(tokens);
+    let mut moisture = Moisture::new();
+
+    engine::register_callbacks(&mut moisture);
+
+    let tokens = engine::stmts_entry(&moisture, stream);
+    let string = tokens.to_string();
+    let literal = LitStr::new(string.as_str(), Span::call_site());
+
+    proc_macro::TokenStream::from(literal.to_token_stream())
+}
+
+#[proc_macro]
+pub fn gstmts(tokens: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    let stream = TokenStream::from(tokens);
+    let mut moisture = Moisture::new();
+    engine::register_callbacks(&mut moisture);
+    proc_macro::TokenStream::from(engine::stmts_entry(&moisture, stream))
+}
+
+#[proc_macro]
+pub fn gs(tokens: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    let stream = TokenStream::from(tokens);
+    let mut moisture = Moisture::new();
+    engine::register_callbacks(&mut moisture);
+    proc_macro::TokenStream::from(engine::str_entry(&moisture, stream))
+}
+
+#[proc_macro]
+pub fn gi(tokens: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    let stream = TokenStream::from(tokens);
+    let mut moisture = Moisture::new();
+    engine::register_callbacks(&mut moisture);
+    proc_macro::TokenStream::from(engine::int_entry(&moisture, stream))
+}

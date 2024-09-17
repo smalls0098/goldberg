@@ -177,3 +177,9 @@ fn test_string() {
 
     assert_eq!(string, "This is an encrypted string!");
 }
+
+#[test]
+fn test_int_stringify() {
+    let value = goldberg_stringify!(4u32);
+    println!("{:?}", value);
+}
