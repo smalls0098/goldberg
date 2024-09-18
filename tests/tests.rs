@@ -165,13 +165,6 @@ fn test_advent() {
 }
 
 #[test]
-fn test_int() {
-    let value = goldberg_int!(0xDEADBEEFu32);
-
-    assert_eq!(value, 0xDEADBEEF);
-}
-
-#[test]
 fn test_string() {
     let string = String::from(goldberg_string!("This is an encrypted string!"));
 
@@ -179,7 +172,7 @@ fn test_string() {
 }
 
 #[test]
-fn test_int_stringify() {
-    let value = goldberg_stringify!(4u32);
-    println!("{:?}", value);
+fn test_include_str() {
+    let string = String::from(goldberg_include_str!("tests/origami-input.txt"));
+    assert_eq!(string, include_str!("origami-input.txt"));
 }

@@ -174,6 +174,47 @@ pub fn goldberg_string(tokens: proc_macro::TokenStream) -> proc_macro::TokenStre
     proc_macro::TokenStream::from(engine::str_entry(&moisture, stream))
 }
 
+/// Obfuscate a string literal from a file.
+///
+/// Due to the nature of string literals, in order for this to work, the macro must return a *temporary object* back
+/// to the call site. Therefore, the obfuscated string literal must be used right away (e.g., an argument to a
+/// function call). For long-lasting obfuscated string literals, wrap the macro in [`String::from`](String::from).
+#[proc_macro]
+pub fn goldberg_include_str(tokens: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    let tokens: Vec<_> = tokens.into_iter().collect();
+
+    let path = match tokens.as_slice() {
+        [proc_macro::TokenTree::Literal(lit)] => unwrap_string_literal(lit),
+        _ => panic!("This macro only accepts a single, non-empty string argument"),
+    };
+
+    // Read the file
+    let file_content = std::fs::read_to_string(&path).expect(format!("Could not read file: {}", path).as_str());
+
+    let mut moisture = Moisture::new();
+
+    engine::register_callbacks(&mut moisture);
+
+    // Make up the stream
+    let stream = TokenStream::from(quote::quote! {
+        #file_content
+    });
+
+    proc_macro::TokenStream::from(engine::str_entry(&moisture, stream))
+}
+
+fn unwrap_string_literal(lit: &proc_macro::Literal) -> String {
+    let mut repr = lit.to_string();
+    if !repr.starts_with('"') || !repr.ends_with('"') {
+        panic!("This macro only accepts a single, non-empty string argument")
+    }
+
+    repr.remove(0);
+    repr.pop();
+
+    repr
+}
+
 #[proc_macro]
 pub fn gstringify(tokens: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let stream = TokenStream::from(tokens);
