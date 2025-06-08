@@ -1,4 +1,4 @@
-use goldberg::{goldberg_int};
+use goldberg::{goldberg_int, goldberg_stringify};
 
 #[test]
 fn test_int() {

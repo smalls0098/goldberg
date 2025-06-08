@@ -6,12 +6,14 @@
 //! * integer literal obfuscation
 //!
 //! Of course, some caveats apply:
-//! * code-flow obfuscation only applies to statements that have mobility (see [`goldberg_stmts`](goldberg_stmts!)).
-//! * string literal encryption produces temporary objects (see [`goldberg_string`](goldberg_string!)).
+//! * code-flow obfuscation only applies to statements that have mobility (see
+//!   [`goldberg_stmts`](goldberg_stmts!)).
+//! * string literal encryption produces temporary objects (see
+//!   [`goldberg_string`](goldberg_string!)).
 //! * integer literals must be typed (see [`goldberg_int`](goldberg_int!)).
 //!
-//! Despite these caveats, these simple techniques produce powerfully annoying obfuscation that survives code
-//! optimization.
+//! Despite these caveats, these simple techniques produce powerfully annoying
+//! obfuscation that survives code optimization.
 //!
 //! ```rust
 //! use goldberg::goldberg_stmts;
@@ -91,34 +93,36 @@
 //!                         ...
 //! ```
 //!
-//! For obfuscating statements, use [`goldberg_stmts`](goldberg_stmts!). For encrypting strings, use [`goldberg_string`](goldberg_string!).
-//! For integers, use [`goldberg_int`](goldberg_int!). To convert obfuscated statements into a string for external processing,
-//! use [`goldberg_stringify`](goldberg_stringify!). For functional examples, read
-//! [the test file](https://github.com/frank2/goldberg/blob/main/tests/tests.rs).
+//! For obfuscating statements, use [`goldberg_stmts`](goldberg_stmts!). For
+//! encrypting strings, use [`goldberg_string`](goldberg_string!). For integers,
+//! use [`goldberg_int`](goldberg_int!). To convert obfuscated statements into a
+//! string for external processing,
+//! use [`goldberg_stringify`](goldberg_stringify!). For functional examples,
+//! read [the test file](https://github.com/frank2/goldberg/blob/main/tests/tests.rs).
 extern crate proc_macro;
 
 use moisture::Moisture;
-
 use proc_macro2::{Span, TokenStream};
-
 use quote::ToTokens;
-
 use syn::LitStr;
 
 mod engine;
 
 /// Obfuscate a series of statements.
 ///
-/// This implicitly applies [`goldberg_string`](goldberg_string!) and [`goldberg_int`](goldberg_int!)
-/// obfuscation to corresponding string literals and integer literals as well as code-flow obfuscation.
+/// This implicitly applies [`goldberg_string`](goldberg_string!) and
+/// [`goldberg_int`](goldberg_int!) obfuscation to corresponding string literals
+/// and integer literals as well as code-flow obfuscation.
 ///
-/// Statements are obfuscated by randomizing their apparent order with loop/match obfuscation. This
-/// determines order with a rolling encryption key which identifies which statement to execute. To accomplish
-/// this, a statement in the statements must be *mobile*. A statement is mobile if:
+/// Statements are obfuscated by randomizing their apparent order with
+/// loop/match obfuscation. This determines order with a rolling encryption key
+/// which identifies which statement to execute. To accomplish this, a statement
+/// in the statements must be *mobile*. A statement is mobile if:
 ///
 /// * It is not the last expression in the series of statements
 /// * It is not an [item](https://doc.rust-lang.org/reference/items.html).
-/// * It is a typed `let` statement (e.g., `let x: u32 = 0`) and the type implements the [Default](std::default::Default) trait.
+/// * It is a typed `let` statement (e.g., `let x: u32 = 0`) and the type
+///   implements the [Default](std::default::Default) trait.
 #[proc_macro]
 pub fn goldberg_stmts(tokens: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let stream = TokenStream::from(tokens);
@@ -128,10 +132,11 @@ pub fn goldberg_stmts(tokens: proc_macro::TokenStream) -> proc_macro::TokenStrea
     proc_macro::TokenStream::from(engine::stmts_entry(&moisture, stream))
 }
 
-/// Obfuscate with the [`goldberg_stmts`](goldberg_stmts!) macro, but return the code as a string.
+/// Obfuscate with the [`goldberg_stmts`](goldberg_stmts!) macro, but return the
+/// code as a string.
 ///
-/// Note that [syn](syn) and [proc-macro2](proc_macro2) don't pretty-format the code.
-/// For that, you'll need to run the string through
+/// Note that [syn](syn) and [proc-macro2](proc_macro2) don't pretty-format the
+/// code. For that, you'll need to run the string through
 /// [`rustfmt`](https://doc.rust-lang.org/book/appendix-04-useful-development-tools.html#automatic-formatting-with-rustfmt).
 #[proc_macro]
 pub fn goldberg_stringify(tokens: proc_macro::TokenStream) -> proc_macro::TokenStream {
@@ -149,8 +154,9 @@ pub fn goldberg_stringify(tokens: proc_macro::TokenStream) -> proc_macro::TokenS
 
 /// Obfuscate an integer literal.
 ///
-/// This requires that the integer literal has a type suffix (i.e., the `u32` in `0xDEADBEEFu32`). Obfuscation
-/// will not take effect on an integer without a type.
+/// This requires that the integer literal has a type suffix (i.e., the `u32` in
+/// `0xDEADBEEFu32`). Obfuscation will not take effect on an integer without a
+/// type.
 #[proc_macro]
 pub fn goldberg_int(tokens: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let stream = TokenStream::from(tokens);
@@ -162,9 +168,11 @@ pub fn goldberg_int(tokens: proc_macro::TokenStream) -> proc_macro::TokenStream 
 
 /// Obfuscate (or rather, encrypt) a string literal.
 ///
-/// Due to the nature of string literals, in order for this to work, the macro must return a *temporary object* back
-/// to the call site. Therefore, the obfuscated string literal must be used right away (e.g., an argument to a
-/// function call). For long-lasting obfuscated string literals, wrap the macro in [`String::from`](String::from).
+/// Due to the nature of string literals, in order for this to work, the macro
+/// must return a *temporary object* back to the call site. Therefore, the
+/// obfuscated string literal must be used right away (e.g., an argument to a
+/// function call). For long-lasting obfuscated string literals, wrap the macro
+/// in [`String::from`](String::from).
 #[proc_macro]
 pub fn goldberg_string(tokens: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let stream = TokenStream::from(tokens);
@@ -176,9 +184,11 @@ pub fn goldberg_string(tokens: proc_macro::TokenStream) -> proc_macro::TokenStre
 
 /// Obfuscate a string literal from a file.
 ///
-/// Due to the nature of string literals, in order for this to work, the macro must return a *temporary object* back
-/// to the call site. Therefore, the obfuscated string literal must be used right away (e.g., an argument to a
-/// function call). For long-lasting obfuscated string literals, wrap the macro in [`String::from`](String::from).
+/// Due to the nature of string literals, in order for this to work, the macro
+/// must return a *temporary object* back to the call site. Therefore, the
+/// obfuscated string literal must be used right away (e.g., an argument to a
+/// function call). For long-lasting obfuscated string literals, wrap the macro
+/// in [`String::from`](String::from).
 #[proc_macro]
 pub fn goldberg_include_str(tokens: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let tokens: Vec<_> = tokens.into_iter().collect();
@@ -189,7 +199,8 @@ pub fn goldberg_include_str(tokens: proc_macro::TokenStream) -> proc_macro::Toke
     };
 
     // Read the file
-    let file_content = std::fs::read_to_string(&path).expect(format!("Could not read file: {}", path).as_str());
+    let file_content =
+        std::fs::read_to_string(&path).expect(format!("Could not read file: {}", path).as_str());
 
     let mut moisture = Moisture::new();
 

@@ -1,17 +1,11 @@
-use moisture::{CallbackType, Context, Moisture, run_moisture};
-
+use moisture::{run_moisture, CallbackType, Context, Moisture};
 use proc_macro2::{Ident, Span, TokenStream};
-
 use quote::{quote, quote_spanned, ToTokens};
-
 use rand::prelude::*;
-
-use syn::*;
-use syn::parse::Parser;
-use syn::spanned::Spanned;
+use syn::{parse::Parser, spanned::Spanned, *};
 
 fn random_letter() -> char {
-    let value = random::<u8>() % 26;
+    let value = rand::random::<u8>() % 26;
 
     (value + 0x61) as char
 }
@@ -21,12 +15,15 @@ fn random_identifier(length: usize) -> String {
 }
 
 fn random_key(length: usize) -> Vec<u8> {
-    (0..length).map(|_| random::<u8>()).collect()
+    (0..length).map(|_| rand::random::<u8>()).collect()
 }
 
 fn unique_ident(prefix: Option<&str>) -> Ident {
     if let Some(prefix_str) = prefix {
-        Ident::new(format!("{}_{}", prefix_str, random_identifier(8)).as_str(), Span::call_site())
+        Ident::new(
+            format!("{}_{}", prefix_str, random_identifier(8)).as_str(),
+            Span::call_site(),
+        )
     } else {
         Ident::new(random_identifier(16).as_str(), Span::call_site())
     }
@@ -51,15 +48,17 @@ pub fn int_entry(moisture: &Moisture, tokens: TokenStream) -> TokenStream {
 }
 
 pub fn loop_match(statements: &Vec<TokenStream>) -> TokenStream {
-    if statements.len() == 1 { return statements[0].clone(); }
+    if statements.len() == 1 {
+        return statements[0].clone();
+    }
 
     let mut idents = Vec::<u32>::new();
 
     for _ in 0..statements.len() + 1 {
-        let mut value = random::<u32>();
+        let mut value = rand::random::<u32>();
 
         while idents.contains(&value) {
-            value = random::<u32>();
+            value = rand::random::<u32>();
         }
 
         idents.push(value);
@@ -79,7 +78,7 @@ pub fn loop_match(statements: &Vec<TokenStream>) -> TokenStream {
         keyed_streams.push((ident, key, statements[i].clone()));
     }
 
-    let mut rng = thread_rng();
+    let mut rng = rand::rng();
     keyed_streams.as_mut_slice().shuffle(&mut rng);
 
     let mut identified_streams = Vec::<TokenStream>::new();
@@ -150,10 +149,7 @@ pub fn expr_is_mobile(expr: &Expr) -> bool {
 }
 
 pub fn local_path_to_init_path(path: &TypePath) -> TokenStream {
-    let TypePath {
-        qself,
-        path
-    } = path;
+    let TypePath { qself, path } = path;
     let mut result = TokenStream::new();
     let mut tokens = Vec::<TokenStream>::new();
 
@@ -168,14 +164,13 @@ pub fn local_path_to_init_path(path: &TypePath) -> TokenStream {
     let mut segments = Vec::<TokenStream>::new();
 
     for segment in &path.segments {
-        let PathSegment {
-            ident,
-            arguments
-        } = segment;
+        let PathSegment { ident, arguments } = segment;
 
         segments.push(ident.to_token_stream());
 
-        if let PathArguments::None = arguments { continue; }
+        if let PathArguments::None = arguments {
+            continue;
+        }
 
         if let PathArguments::AngleBracketed(generic_args) = arguments {
             // segments.push(quote! { :: });
@@ -189,26 +184,35 @@ pub fn local_path_to_init_path(path: &TypePath) -> TokenStream {
     result
 }
 
-pub fn split_local(moisture: &Moisture, context: &Context, local: &Local) -> Result<(TokenStream, TokenStream, Option<TokenStream>)> {
+pub fn split_local(
+    moisture: &Moisture,
+    context: &Context,
+    local: &Local,
+) -> Result<(TokenStream, TokenStream, Option<TokenStream>)> {
     let Local {
         attrs: _,
         let_token: _,
         pat,
         init,
-        semi_token: _
+        semi_token: _,
     } = local.clone();
 
     let pat_type;
 
     if let Pat::Type(type_data) = pat {
         pat_type = type_data;
-    } else { return Err(Error::new(local.span(), "Local declaration splitting without PatType pattern")); }
+    } else {
+        return Err(Error::new(
+            local.span(),
+            "Local declaration splitting without PatType pattern",
+        ));
+    }
 
     let PatType {
         attrs: _,
         pat: type_ident,
         colon_token: _,
-        ty
+        ty,
     } = pat_type;
 
     let fixed_ident;
@@ -219,7 +223,7 @@ pub fn split_local(moisture: &Moisture, context: &Context, local: &Local) -> Res
             by_ref: _,
             mutability: _,
             ident,
-            subpat: _
+            subpat: _,
         } = pat_ident;
 
         fixed_ident = quote! { #(#attrs)* #ident };
@@ -239,17 +243,29 @@ pub fn split_local(moisture: &Moisture, context: &Context, local: &Local) -> Res
         declare_tokens = quote! {
             let mut #fixed_ident: #ty = #default_path::default();
         };
-    } else { return Err(Error::new(ty.span(), "Local type does not resolve into a Path segment")); }
+    } else {
+        return Err(Error::new(
+            ty.span(),
+            "Local type does not resolve into a Path segment",
+        ));
+    }
 
     if let Some((_, init_expr)) = init {
-        let new_expr = moisture.callback(context, CallbackType::Expr, init_expr.to_token_stream())?;
+        let new_expr =
+            moisture.callback(context, CallbackType::Expr, init_expr.to_token_stream())?;
         let init_tokens = quote! { #fixed_ident = #new_expr; };
 
         Ok((assert_tokens, declare_tokens, Some(init_tokens)))
-    } else { Ok((assert_tokens, declare_tokens, None)) }
+    } else {
+        Ok((assert_tokens, declare_tokens, None))
+    }
 }
 
-pub fn stmts_handler(moisture: &Moisture, context: &Context, tokens: TokenStream) -> Result<TokenStream> {
+pub fn stmts_handler(
+    moisture: &Moisture,
+    context: &Context,
+    tokens: TokenStream,
+) -> Result<TokenStream> {
     let statements = Block::parse_within.parse2(tokens)?;
     let mut stream = TokenStream::new();
     let mut statement_streams = Vec::<TokenStream>::new();
@@ -272,74 +288,98 @@ pub fn stmts_handler(moisture: &Moisture, context: &Context, tokens: TokenStream
 
                     continue;
                 } else if loop_match_candidates.len() > 0 {
-                    loop_match_declarations.iter().for_each(|x| statement_streams.push(x.clone()));
+                    loop_match_declarations
+                        .iter()
+                        .for_each(|x| statement_streams.push(x.clone()));
                     statement_streams.push(loop_match(&loop_match_candidates));
 
                     loop_match_declarations.clear();
                     loop_match_candidates.clear();
                 }
 
-                let result = moisture.callback(context, CallbackType::Local, local.to_token_stream())?;
+                let result =
+                    moisture.callback(context, CallbackType::Local, local.to_token_stream())?;
                 statement_streams.push(result);
             }
             Stmt::Item(ref item) => {
                 if loop_match_candidates.len() > 0 {
-                    loop_match_declarations.iter().for_each(|x| statement_streams.push(x.clone()));
+                    loop_match_declarations
+                        .iter()
+                        .for_each(|x| statement_streams.push(x.clone()));
                     statement_streams.push(loop_match(&loop_match_candidates));
 
                     loop_match_declarations.clear();
                     loop_match_candidates.clear();
                 }
 
-                let result = moisture.callback(context, CallbackType::Item, item.to_token_stream())?;
+                let result =
+                    moisture.callback(context, CallbackType::Item, item.to_token_stream())?;
                 statement_streams.push(result);
             }
             Stmt::Expr(ref expr) => {
                 if expr_is_mobile(expr) {
-                    let new_expr = moisture.callback(context, CallbackType::Expr, expr.to_token_stream())?;
+                    let new_expr =
+                        moisture.callback(context, CallbackType::Expr, expr.to_token_stream())?;
                     loop_match_candidates.push(new_expr);
                     continue;
                 } else if loop_match_candidates.len() > 0 {
-                    loop_match_declarations.iter().for_each(|x| statement_streams.push(x.clone()));
+                    loop_match_declarations
+                        .iter()
+                        .for_each(|x| statement_streams.push(x.clone()));
                     statement_streams.push(loop_match(&loop_match_candidates));
 
                     loop_match_declarations.clear();
                     loop_match_candidates.clear();
                 }
 
-                let new_expr = moisture.callback(context, CallbackType::Expr, expr.to_token_stream())?;
+                let new_expr =
+                    moisture.callback(context, CallbackType::Expr, expr.to_token_stream())?;
                 statement_streams.push(new_expr);
             }
             Stmt::Semi(ref expr, _) => {
                 if expr_is_mobile(expr) {
-                    let new_expr = moisture.callback(context, CallbackType::Expr, expr.to_token_stream())?;
+                    let new_expr =
+                        moisture.callback(context, CallbackType::Expr, expr.to_token_stream())?;
                     loop_match_candidates.push(quote! { #new_expr ; });
                     continue;
                 } else if loop_match_candidates.len() > 0 {
-                    loop_match_declarations.iter().for_each(|x| statement_streams.push(x.clone()));
+                    loop_match_declarations
+                        .iter()
+                        .for_each(|x| statement_streams.push(x.clone()));
                     statement_streams.push(loop_match(&loop_match_candidates));
 
                     loop_match_declarations.clear();
                     loop_match_candidates.clear();
                 }
 
-                let new_expr = moisture.callback(context, CallbackType::Expr, expr.to_token_stream())?;
+                let new_expr =
+                    moisture.callback(context, CallbackType::Expr, expr.to_token_stream())?;
                 statement_streams.push(quote! { #new_expr ; });
             }
         }
     }
 
     if loop_match_candidates.len() > 0 {
-        loop_match_declarations.iter().for_each(|x| statement_streams.push(x.clone()));
+        loop_match_declarations
+            .iter()
+            .for_each(|x| statement_streams.push(x.clone()));
         statement_streams.push(loop_match(&loop_match_candidates));
     }
 
     let final_statement = &statements[statements.len() - 1];
     let result = match final_statement {
-        Stmt::Local(ref local) => moisture.callback(context, CallbackType::Local, local.to_token_stream()),
-        Stmt::Item(ref item) => moisture.callback(context, CallbackType::Item, item.to_token_stream()),
-        Stmt::Expr(ref expr) => moisture.callback(context, CallbackType::Expr, expr.to_token_stream()),
-        Stmt::Semi(ref expr, _) => moisture.callback(context, CallbackType::Expr, expr.to_token_stream()),
+        Stmt::Local(ref local) => {
+            moisture.callback(context, CallbackType::Local, local.to_token_stream())
+        }
+        Stmt::Item(ref item) => {
+            moisture.callback(context, CallbackType::Item, item.to_token_stream())
+        }
+        Stmt::Expr(ref expr) => {
+            moisture.callback(context, CallbackType::Expr, expr.to_token_stream())
+        }
+        Stmt::Semi(ref expr, _) => {
+            moisture.callback(context, CallbackType::Expr, expr.to_token_stream())
+        }
     }?;
 
     if let Stmt::Semi(_, _) = final_statement {
@@ -353,10 +393,15 @@ pub fn stmts_handler(moisture: &Moisture, context: &Context, tokens: TokenStream
     Ok(stream)
 }
 
-pub fn lit_str_handler(_: &Moisture, context: &Context, tokens: TokenStream) -> Result<TokenStream> {
+pub fn lit_str_handler(
+    _: &Moisture,
+    context: &Context,
+    tokens: TokenStream,
+) -> Result<TokenStream> {
     let lit_str = parse2::<LitStr>(tokens)?;
 
-    // Pattern objects can't be turned into expressions, so the obfuscation technique will fail to compile
+    // Pattern objects can't be turned into expressions, so the obfuscation
+    // technique will fail to compile
     if let Some((CallbackType::PatLit, _)) = context.peek(4) {
         return Ok(lit_str.to_token_stream());
     }
@@ -367,7 +412,9 @@ pub fn lit_str_handler(_: &Moisture, context: &Context, tokens: TokenStream) -> 
 pub fn lit_str_obfu(str_obj: &LitStr) -> TokenStream {
     let str_data = str_obj.value();
 
-    if str_data.len() == 0 { return str_obj.to_token_stream(); }
+    if str_data.len() == 0 {
+        return str_obj.to_token_stream();
+    }
 
     let str_bytes: Vec<u8> = str_data.as_str().as_bytes().iter().copied().collect();
     let key = random_key(str_bytes.len());
@@ -432,18 +479,18 @@ impl IntType {
     }
     pub fn fake_suffix(&self) -> &str {
         match self {
-            IntType::I8 => { "i8" }
-            IntType::U8 => { "u8" }
-            IntType::I16 => { "i16" }
-            IntType::U16 => { "u16" }
-            IntType::I32 => { "i32" }
-            IntType::U32 => { "u32" }
-            IntType::I64 => { "i64" }
-            IntType::U64 => { "u64" }
-            IntType::I128 => { "i128" }
-            IntType::U128 => { "u128" }
-            IntType::Isize => { "i32" }
-            IntType::Usize => { "u32" }
+            IntType::I8 => "i8",
+            IntType::U8 => "u8",
+            IntType::I16 => "i16",
+            IntType::U16 => "u16",
+            IntType::I32 => "i32",
+            IntType::U32 => "u32",
+            IntType::I64 => "i64",
+            IntType::U64 => "u64",
+            IntType::I128 => "i128",
+            IntType::U128 => "u128",
+            IntType::Isize => "i32",
+            IntType::Usize => "u32",
         }
     }
 }
@@ -466,137 +513,281 @@ enum IntOperand {
 impl IntOperand {
     pub fn random(ty: IntType) -> Self {
         match ty {
-            IntType::I8 => Self::I8(random::<i8>()),
-            IntType::U8 => Self::U8(random::<u8>()),
-            IntType::I16 => Self::I16(random::<i16>()),
-            IntType::U16 => Self::U16(random::<u16>()),
-            IntType::I32 => Self::I32(random::<i32>()),
-            IntType::U32 => Self::U32(random::<u32>()),
-            IntType::I64 => Self::I64(random::<i64>()),
-            IntType::U64 => Self::U64(random::<u64>()),
-            IntType::I128 => Self::I128(random::<i128>()),
-            IntType::U128 => Self::U128(random::<u128>()),
-            IntType::Isize => Self::Isize(random::<i32>()),
-            IntType::Usize => Self::Usize(random::<u32>()),
+            IntType::I8 => Self::I8(rand::random::<i8>()),
+            IntType::U8 => Self::U8(rand::random::<u8>()),
+            IntType::I16 => Self::I16(rand::random::<i16>()),
+            IntType::U16 => Self::U16(rand::random::<u16>()),
+            IntType::I32 => Self::I32(rand::random::<i32>()),
+            IntType::U32 => Self::U32(rand::random::<u32>()),
+            IntType::I64 => Self::I64(rand::random::<i64>()),
+            IntType::U64 => Self::U64(rand::random::<u64>()),
+            IntType::I128 => Self::I128(rand::random::<i128>()),
+            IntType::U128 => Self::U128(rand::random::<u128>()),
+            IntType::Isize => Self::Isize(rand::random::<i32>()),
+            IntType::Usize => Self::Usize(rand::random::<u32>()),
         }
     }
     pub fn add(&self, op: Self) -> Self {
         match self {
             Self::I8(lh) => {
-                if let Self::I8(rh) = op { Self::I8(lh.wrapping_add(rh)) } else { panic!("operand type mismatch"); }
+                if let Self::I8(rh) = op {
+                    Self::I8(lh.wrapping_add(rh))
+                } else {
+                    panic!("operand type mismatch");
+                }
             }
             Self::U8(lh) => {
-                if let Self::U8(rh) = op { Self::U8(lh.wrapping_add(rh)) } else { panic!("operand type mismatch"); }
+                if let Self::U8(rh) = op {
+                    Self::U8(lh.wrapping_add(rh))
+                } else {
+                    panic!("operand type mismatch");
+                }
             }
             Self::I16(lh) => {
-                if let Self::I16(rh) = op { Self::I16(lh.wrapping_add(rh)) } else { panic!("operand type mismatch"); }
+                if let Self::I16(rh) = op {
+                    Self::I16(lh.wrapping_add(rh))
+                } else {
+                    panic!("operand type mismatch");
+                }
             }
             Self::U16(lh) => {
-                if let Self::U16(rh) = op { Self::U16(lh.wrapping_add(rh)) } else { panic!("operand type mismatch"); }
+                if let Self::U16(rh) = op {
+                    Self::U16(lh.wrapping_add(rh))
+                } else {
+                    panic!("operand type mismatch");
+                }
             }
             Self::I32(lh) => {
-                if let Self::I32(rh) = op { Self::I32(lh.wrapping_add(rh)) } else { panic!("operand type mismatch"); }
+                if let Self::I32(rh) = op {
+                    Self::I32(lh.wrapping_add(rh))
+                } else {
+                    panic!("operand type mismatch");
+                }
             }
             Self::U32(lh) => {
-                if let Self::U32(rh) = op { Self::U32(lh.wrapping_add(rh)) } else { panic!("operand type mismatch"); }
+                if let Self::U32(rh) = op {
+                    Self::U32(lh.wrapping_add(rh))
+                } else {
+                    panic!("operand type mismatch");
+                }
             }
             Self::I64(lh) => {
-                if let Self::I64(rh) = op { Self::I64(lh.wrapping_add(rh)) } else { panic!("operand type mismatch"); }
+                if let Self::I64(rh) = op {
+                    Self::I64(lh.wrapping_add(rh))
+                } else {
+                    panic!("operand type mismatch");
+                }
             }
             Self::U64(lh) => {
-                if let Self::U64(rh) = op { Self::U64(lh.wrapping_add(rh)) } else { panic!("operand type mismatch"); }
+                if let Self::U64(rh) = op {
+                    Self::U64(lh.wrapping_add(rh))
+                } else {
+                    panic!("operand type mismatch");
+                }
             }
             Self::I128(lh) => {
-                if let Self::I128(rh) = op { Self::I128(lh.wrapping_add(rh)) } else { panic!("operand type mismatch"); }
+                if let Self::I128(rh) = op {
+                    Self::I128(lh.wrapping_add(rh))
+                } else {
+                    panic!("operand type mismatch");
+                }
             }
             Self::U128(lh) => {
-                if let Self::U128(rh) = op { Self::U128(lh.wrapping_add(rh)) } else { panic!("operand type mismatch"); }
+                if let Self::U128(rh) = op {
+                    Self::U128(lh.wrapping_add(rh))
+                } else {
+                    panic!("operand type mismatch");
+                }
             }
             Self::Isize(lh) => {
-                if let Self::Isize(rh) = op { Self::Isize(lh.wrapping_add(rh)) } else { panic!("operand type mismatch"); }
+                if let Self::Isize(rh) = op {
+                    Self::Isize(lh.wrapping_add(rh))
+                } else {
+                    panic!("operand type mismatch");
+                }
             }
             Self::Usize(lh) => {
-                if let Self::Usize(rh) = op { Self::Usize(lh.wrapping_add(rh)) } else { panic!("operand type mismatch"); }
+                if let Self::Usize(rh) = op {
+                    Self::Usize(lh.wrapping_add(rh))
+                } else {
+                    panic!("operand type mismatch");
+                }
             }
         }
     }
     pub fn sub(&self, op: Self) -> Self {
         match self {
             Self::I8(lh) => {
-                if let Self::I8(rh) = op { Self::I8(lh.wrapping_sub(rh)) } else { panic!("operand type mismatch"); }
+                if let Self::I8(rh) = op {
+                    Self::I8(lh.wrapping_sub(rh))
+                } else {
+                    panic!("operand type mismatch");
+                }
             }
             Self::U8(lh) => {
-                if let Self::U8(rh) = op { Self::U8(lh.wrapping_sub(rh)) } else { panic!("operand type mismatch"); }
+                if let Self::U8(rh) = op {
+                    Self::U8(lh.wrapping_sub(rh))
+                } else {
+                    panic!("operand type mismatch");
+                }
             }
             Self::I16(lh) => {
-                if let Self::I16(rh) = op { Self::I16(lh.wrapping_sub(rh)) } else { panic!("operand type mismatch"); }
+                if let Self::I16(rh) = op {
+                    Self::I16(lh.wrapping_sub(rh))
+                } else {
+                    panic!("operand type mismatch");
+                }
             }
             Self::U16(lh) => {
-                if let Self::U16(rh) = op { Self::U16(lh.wrapping_sub(rh)) } else { panic!("operand type mismatch"); }
+                if let Self::U16(rh) = op {
+                    Self::U16(lh.wrapping_sub(rh))
+                } else {
+                    panic!("operand type mismatch");
+                }
             }
             Self::I32(lh) => {
-                if let Self::I32(rh) = op { Self::I32(lh.wrapping_sub(rh)) } else { panic!("operand type mismatch"); }
+                if let Self::I32(rh) = op {
+                    Self::I32(lh.wrapping_sub(rh))
+                } else {
+                    panic!("operand type mismatch");
+                }
             }
             Self::U32(lh) => {
-                if let Self::U32(rh) = op { Self::U32(lh.wrapping_sub(rh)) } else { panic!("operand type mismatch"); }
+                if let Self::U32(rh) = op {
+                    Self::U32(lh.wrapping_sub(rh))
+                } else {
+                    panic!("operand type mismatch");
+                }
             }
             Self::I64(lh) => {
-                if let Self::I64(rh) = op { Self::I64(lh.wrapping_sub(rh)) } else { panic!("operand type mismatch"); }
+                if let Self::I64(rh) = op {
+                    Self::I64(lh.wrapping_sub(rh))
+                } else {
+                    panic!("operand type mismatch");
+                }
             }
             Self::U64(lh) => {
-                if let Self::U64(rh) = op { Self::U64(lh.wrapping_sub(rh)) } else { panic!("operand type mismatch"); }
+                if let Self::U64(rh) = op {
+                    Self::U64(lh.wrapping_sub(rh))
+                } else {
+                    panic!("operand type mismatch");
+                }
             }
             Self::I128(lh) => {
-                if let Self::I128(rh) = op { Self::I128(lh.wrapping_sub(rh)) } else { panic!("operand type mismatch"); }
+                if let Self::I128(rh) = op {
+                    Self::I128(lh.wrapping_sub(rh))
+                } else {
+                    panic!("operand type mismatch");
+                }
             }
             Self::U128(lh) => {
-                if let Self::U128(rh) = op { Self::U128(lh.wrapping_sub(rh)) } else { panic!("operand type mismatch"); }
+                if let Self::U128(rh) = op {
+                    Self::U128(lh.wrapping_sub(rh))
+                } else {
+                    panic!("operand type mismatch");
+                }
             }
             Self::Isize(lh) => {
-                if let Self::Isize(rh) = op { Self::Isize(lh.wrapping_sub(rh)) } else { panic!("operand type mismatch"); }
+                if let Self::Isize(rh) = op {
+                    Self::Isize(lh.wrapping_sub(rh))
+                } else {
+                    panic!("operand type mismatch");
+                }
             }
             Self::Usize(lh) => {
-                if let Self::Usize(rh) = op { Self::Usize(lh.wrapping_sub(rh)) } else { panic!("operand type mismatch"); }
+                if let Self::Usize(rh) = op {
+                    Self::Usize(lh.wrapping_sub(rh))
+                } else {
+                    panic!("operand type mismatch");
+                }
             }
         }
     }
     pub fn xor(&self, op: Self) -> Self {
         match self {
             Self::I8(lh) => {
-                if let Self::I8(rh) = op { Self::I8(lh ^ rh) } else { panic!("operand type mismatch"); }
+                if let Self::I8(rh) = op {
+                    Self::I8(lh ^ rh)
+                } else {
+                    panic!("operand type mismatch");
+                }
             }
             Self::U8(lh) => {
-                if let Self::U8(rh) = op { Self::U8(lh ^ rh) } else { panic!("operand type mismatch"); }
+                if let Self::U8(rh) = op {
+                    Self::U8(lh ^ rh)
+                } else {
+                    panic!("operand type mismatch");
+                }
             }
             Self::I16(lh) => {
-                if let Self::I16(rh) = op { Self::I16(lh ^ rh) } else { panic!("operand type mismatch"); }
+                if let Self::I16(rh) = op {
+                    Self::I16(lh ^ rh)
+                } else {
+                    panic!("operand type mismatch");
+                }
             }
             Self::U16(lh) => {
-                if let Self::U16(rh) = op { Self::U16(lh ^ rh) } else { panic!("operand type mismatch"); }
+                if let Self::U16(rh) = op {
+                    Self::U16(lh ^ rh)
+                } else {
+                    panic!("operand type mismatch");
+                }
             }
             Self::I32(lh) => {
-                if let Self::I32(rh) = op { Self::I32(lh ^ rh) } else { panic!("operand type mismatch"); }
+                if let Self::I32(rh) = op {
+                    Self::I32(lh ^ rh)
+                } else {
+                    panic!("operand type mismatch");
+                }
             }
             Self::U32(lh) => {
-                if let Self::U32(rh) = op { Self::U32(lh ^ rh) } else { panic!("operand type mismatch"); }
+                if let Self::U32(rh) = op {
+                    Self::U32(lh ^ rh)
+                } else {
+                    panic!("operand type mismatch");
+                }
             }
             Self::I64(lh) => {
-                if let Self::I64(rh) = op { Self::I64(lh ^ rh) } else { panic!("operand type mismatch"); }
+                if let Self::I64(rh) = op {
+                    Self::I64(lh ^ rh)
+                } else {
+                    panic!("operand type mismatch");
+                }
             }
             Self::U64(lh) => {
-                if let Self::U64(rh) = op { Self::U64(lh ^ rh) } else { panic!("operand type mismatch"); }
+                if let Self::U64(rh) = op {
+                    Self::U64(lh ^ rh)
+                } else {
+                    panic!("operand type mismatch");
+                }
             }
             Self::I128(lh) => {
-                if let Self::I128(rh) = op { Self::I128(lh ^ rh) } else { panic!("operand type mismatch"); }
+                if let Self::I128(rh) = op {
+                    Self::I128(lh ^ rh)
+                } else {
+                    panic!("operand type mismatch");
+                }
             }
             Self::U128(lh) => {
-                if let Self::U128(rh) = op { Self::U128(lh ^ rh) } else { panic!("operand type mismatch"); }
+                if let Self::U128(rh) = op {
+                    Self::U128(lh ^ rh)
+                } else {
+                    panic!("operand type mismatch");
+                }
             }
             Self::Isize(lh) => {
-                if let Self::Isize(rh) = op { Self::Isize(lh ^ rh) } else { panic!("operand type mismatch"); }
+                if let Self::Isize(rh) = op {
+                    Self::Isize(lh ^ rh)
+                } else {
+                    panic!("operand type mismatch");
+                }
             }
             Self::Usize(lh) => {
-                if let Self::Usize(rh) = op { Self::Usize(lh ^ rh) } else { panic!("operand type mismatch"); }
+                if let Self::Usize(rh) = op {
+                    Self::Usize(lh ^ rh)
+                } else {
+                    panic!("operand type mismatch");
+                }
             }
         }
     }
@@ -715,13 +906,13 @@ enum IntOperation {
 }
 impl IntOperation {
     pub fn random(ty: IntType) -> Self {
-        let operation = random::<u8>() % 7;
+        let operation = rand::random::<u8>() % 7;
         match operation {
             0 => Self::Add(IntOperand::random(ty)),
             1 => Self::Sub(IntOperand::random(ty)),
             2 => Self::Xor(IntOperand::random(ty)),
-            3 => Self::RotateLeft(random::<u32>()),
-            4 => Self::RotateRight(random::<u32>()),
+            3 => Self::RotateLeft(rand::random::<u32>()),
+            4 => Self::RotateRight(rand::random::<u32>()),
             5 => Self::SwapBytes,
             _ => Self::ReverseBits,
         }
@@ -761,10 +952,15 @@ impl IntOperation {
     }
 }
 
-pub fn lit_int_handler(moisture: &Moisture, context: &Context, tokens: TokenStream) -> Result<TokenStream> {
+pub fn lit_int_handler(
+    moisture: &Moisture,
+    context: &Context,
+    tokens: TokenStream,
+) -> Result<TokenStream> {
     let lit_int = parse2::<LitInt>(tokens)?;
 
-    // Pattern objects can't be turned into expressions, so the obfuscation technique will fail to compile
+    // Pattern objects can't be turned into expressions, so the obfuscation
+    // technique will fail to compile
     if let Some((CallbackType::PatLit, _)) = context.peek(4) {
         return Ok(lit_int.to_token_stream());
     }
@@ -787,8 +983,7 @@ pub fn lit_int_obfu(moisture: &Moisture, context: &Context, lit: &LitInt) -> Res
     let int_type = IntType::from_suffix(lit.suffix());
     let mut operations = Vec::<IntOperation>::new();
     let mut calc_op = IntOperand::from(lit.clone());
-    let op_count = random::<usize>() % 2 + 4;
-    while operations.len() < op_count {
+    while operations.len() < 2 {
         let new_op = IntOperation::random(int_type);
         calc_op = new_op.perform(calc_op);
         operations.push(new_op);
@@ -812,7 +1007,6 @@ pub fn lit_int_obfu(moisture: &Moisture, context: &Context, lit: &LitInt) -> Res
             #(#stmts)*
         }
     };
-
 
     let obfu_block = moisture.callback(context, CallbackType::Block, new_block)?;
 
